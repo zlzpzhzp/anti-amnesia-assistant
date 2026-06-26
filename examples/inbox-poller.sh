@@ -28,10 +28,12 @@ TMP="$(mktemp)"
 
 while IFS= read -r line; do
   [ -n "$line" ] || continue
-  # === hand off to your agent here ===
-  # e.g. append to the bot's watched inbox and let the bot summarize+report:
-  #   echo "$line" >> /path/the/bot/watches/inbox.jsonl
-  # then NUDGE the bot to process (tmux send-keys, an API call, etc.)
+  # === hand off to your agent here — see AGENT.md for the full loop ===
+  # The agent: recalls context (recall.py), summarizes, reports to you, and acts only on
+  # your command. Wire one of:
+  #   • claude --channels bot: append to the file it watches + nudge it (tmux send-keys)
+  #       echo "$line" >> /path/the/bot/watches/inbox.jsonl
+  #   • API bot: call your process_item("$line")  (read → recall → report → await command)
   echo "$line" >> "$DONE"
 done < "$TMP"
 

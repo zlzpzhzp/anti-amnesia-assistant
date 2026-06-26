@@ -4,7 +4,9 @@ Most "AI assistant" demos are a transcription pipeline: phone → speech-to-text
 
 A secretary that's genuinely useful is **four layers interlocking**, and the hard, defensible one is **memory** — accumulating, organizing, and recalling your context over months so that a phone call today is understood in light of a text from three weeks ago.
 
-This repo documents that whole architecture (and the dead-ends we hit), so you can build your own. The intake pipeline is included and concrete; the memory layer is described at the level of principles so you can implement it your way.
+This repo documents that whole architecture (and the dead-ends we hit), so you can build your own. The intake pipeline and the memory engine ship as runnable code; the agent loop and setup are written up step by step.
+
+> **Want to build it?** → [**GETTING_STARTED.md**](GETTING_STARTED.md) walks the whole thing end-to-end (server → memory → store → agent → phone macros). The "smart half" — how the agent recalls, reports, and acts — is [**examples/AGENT.md**](examples/AGENT.md).
 
 > Running in production for a small-business owner. A typical day: dozens of SMS, a handful of calls, several voice memos — all captured, summarized, and filed, with the assistant remembering what came before.
 
@@ -37,7 +39,7 @@ And — counter-intuitively — sharing this architecture openly costs little: *
 | Layer | What it is | Role |
 |---|---|---|
 | 📡 **Senses** | SMS, phone calls, voice memos, email — forwarded from your phone to a server, transcribed | the input channels |
-| 💬 **Secretary** | a long-lived conversational agent (a Claude Telegram bot) | interprets, decides, reports, and acts **only on your command** |
+| 💬 **Secretary** | a long-lived conversational agent (a Claude Telegram bot) — the loop is in [examples/AGENT.md](examples/AGENT.md) | interprets, decides, reports, and acts **only on your command** |
 | 🧠 **Memory** | a persistent, organized memory store with recall | **the brain and the differentiator** — see below |
 | 🗄️ **Store** | a structured backend (a DB, Notion, a calendar — whatever you already use) + a way to view it | where the agent files results in a durable, queryable **format** |
 
@@ -129,7 +131,7 @@ Three macros, each = **a trigger** + an **HTTP Request (POST)** with a shared-se
 
 ## 🗄️ The store (make it yours)
 
-Ours happens to be a web app over Postgres (students, events, notes, grades) with a UI to review what the secretary filed. **Yours can be anything** with a queryable format and an API the agent can write to: a Postgres/Supabase, Notion, a Google Calendar + a notes table, an Airtable. The only requirements: a **stable schema** (so the agent files consistently) and **read-back** (so memory and you can both review). The agent proposes; you approve; it writes here.
+Ours happens to be a web app over Postgres (events, notes, …) with a UI to review what the secretary filed. **Yours can be anything** with a queryable format and an API the agent can write to: a Postgres/Supabase, Notion, a Google Calendar + a notes table, an Airtable. The only requirements: a **stable schema** (so the agent files consistently) and **read-back** (so memory and you can both review). The agent proposes; you approve; it writes here. A zero-setup starting point is in [`examples/store/schema.sql`](examples/store/schema.sql) (SQLite: contacts / events / tasks / notes).
 
 ---
 
