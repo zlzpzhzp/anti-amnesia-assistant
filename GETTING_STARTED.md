@@ -76,11 +76,42 @@ Each macro = **a trigger** + **an HTTP Request (POST)** action. Common settings 
 - **Action:** HTTP POST `…/call`, **body = the recording file** (multipart/file upload —
   point it at the just-saved recording path). ⚠️ If the server logs `recv audio=0B`, the file
   wasn't attached — fix the HTTP action to send the file as the request body/part.
+- ⚠️ **Guard against missed-call re-sends (important).** *Call Ended* fires even for
+  **missed / unanswered** calls, where no new recording exists. If Macro B reads the file path
+  from a variable set by a separate "file created" macro, that variable stays **stale** — the
+  *previous* call's audio (or a tiny corrupt stub) gets re-uploaded under the new number, so you
+  get duplicate/garbage transcriptions. Fix = only POST when a fresh recording actually exists:
+  - Two-macro pattern: **Macro A** = *File Changed → Created* in the recording folder, sets a
+    variable `callfile = [file_name]`. **Macro B** wraps its HTTP action in `if (callfile != "")`
+    and, after posting, **sets `callfile = ""`** (clear it). A missed call never sets `callfile`,
+    so it stays empty → Macro B skips. Clear it on *every* call-end so a stale value can't linger.
+  - Defense-in-depth on the server: dedupe by audio **sha256** within a short window, so the same
+    bytes never transcribe twice even if the phone re-sends anyway.
 
 ### Macro C — Voice memo
-- **Trigger:** a home-screen **widget / button** (or a Bluetooth-headset button via a
-  connectivity-helper app for hands-free).
-- **Action:** record audio → HTTP POST `…/voice` (short) or `…/lecture` (long), file as multipart.
+- **Trigger:** a home-screen **widget / button** (2 taps: start / stop). Works from the lock screen.
+- **Simplest (phone mic):** MacroDroid's built-in *Record Microphone* action → HTTP POST
+  `…/voice` (short) or `…/lecture` (long — the server strips silence before transcription),
+  file as multipart.
+- **Hands-free from Bluetooth earbuds** (mic near your mouth, phone across the room) — trickier
+  than it looks; here's what actually works:
+  - Android records from a BT mic only over **SCO/HFP = 8 kHz narrowband** (telephony quality).
+    Fine for close-mic voice (same quality call transcription runs on) but *worse* than the phone
+    mic in a quiet room — so only bother for genuine hands-free. High-quality BT-mic recording
+    needs **LE Audio** (BT 5.2+, Android 13+) on *both* phone and earbuds, or a vendor feature;
+    many earbuds don't support it.
+  - MacroDroid's *Record Microphone* and most 3rd-party recorders **can't force the BT mic** (they
+    don't start SCO). What works reliably: your phone's **native voice recorder** if it has a
+    **"use Bluetooth mic when available"** toggle (Samsung's does) — turn it on; it manages SCO
+    itself. (A "connectivity helper" only routes A2DP *output*, not the mic input — it won't help.)
+  - Automate the upload separately: a **File Changed → Created** trigger watching the recorder's
+    save folder (filter `*.m4a`) → **wait ~3 s** (let the file finish writing) → HTTP POST the new
+    file (multipart, use the trigger's file variable) to `…/lecture`.
+  - Robust for any length: a native recorder writes the final file at **stop**, so the trigger
+    always sees a *complete* file — no truncation no matter how long the recording.
+  - Don't-want-to-fiddle alternative: a **wireless mic with a USB-C receiver** — the receiver plugs
+    into the phone, appears as a normal wired mic, and any recorder/macro captures it at full
+    quality, hands-free.
 
 > Tip: keep the endpoint **URLs stable** so you never have to re-edit macros when you change
 > server behavior.

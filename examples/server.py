@@ -186,6 +186,12 @@ async def sms(request: Request, x_internal_token: str = Header(None)):
                           "sms_ts": str(d.get("ts") or d.get("time") or "")})
     return {"ok": True}
 
+# In-memory audio de-dupe (6h window). Guards against the phone re-sending the
+# same recording — e.g. a "call ended" macro firing on a *missed* call with a
+# stale file variable. See GETTING_STARTED "Guard against missed-call re-sends".
+DEDUP_WINDOW = 6 * 3600
+_seen_audio: "dict[str, float]" = {}
+
 async def _audio_endpoint(request, token, kind, trim):
     ip = request.headers.get("x-forwarded-for", "unknown").split(",")[0].strip()
     _auth(token, ip)
@@ -195,6 +201,13 @@ async def _audio_endpoint(request, token, kind, trim):
     if len(audio) < 200:
         _tg(f"{kind}: empty upload ({len(audio)}B) — check MacroDroid HTTP file/body setting")
         return {"ok": False, "reason": "no audio"}
+    # Skip if we've already seen these exact bytes recently (duplicate re-send).
+    h = hashlib.sha256(audio).hexdigest(); now = time.time()
+    for k, exp in list(_seen_audio.items()):
+        if exp < now: _seen_audio.pop(k, None)
+    if h in _seen_audio:
+        return {"ok": True, "skipped": "duplicate"}
+    _seen_audio[h] = now + DEDUP_WINDOW
     suffix = os.path.splitext(fname)[1] or ".m4a"
     if kind == "voice" and 0 <= audio_duration(audio, suffix) < MIN_DURATION:
         return {"ok": True, "skipped": "too_short"}
